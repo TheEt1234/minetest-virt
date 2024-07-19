@@ -4,5 +4,5 @@ echo "${str}"
 echo "Lua's done it's job"
 
 for file in *.ttf; do
-    echo "${str}" | magick -background "rgba(0,0,0,0)" -fill white -font ${file} -pointsize 24 -gravity center label:@- ${file}.png
+    echo "${str}" | magick -background "rgba(0,0,0,0)" -fill white -font ${file} -pointsize 25 -gravity center label:@- ${file}.png &
 done
