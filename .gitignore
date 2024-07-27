@@ -1,2 +1,3 @@
 *.iso
 *.img
+virtual_machines/*

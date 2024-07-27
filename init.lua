@@ -1,5 +1,5 @@
 -- this code may look nightmarish but... well... if you think that don't look at term.lua
-local cat_timeout = "0.01s"
+local cat_timeout = "0.001s"
 
 local MP = minetest.get_modpath(minetest.get_current_modname())
 local WP = minetest.get_worldpath()
@@ -39,7 +39,7 @@ end
 
 local function mkfifo(file)
     assert(validate_bash_str(file))
-    exec(format("mkfifo '%s.in' '%s.out'", file))
+    exec(format("mkfifo '%s.in' '%s.out'", file, file))
 end
 
 local function validate_qemu_size(str)
@@ -56,7 +56,7 @@ local function validate_qemu_size(str)
 end
 
 
-virt.create_image = function(name, size)
+virt.create_vm = function(name, size)
     assert(validate_bash_str(name))
     assert(validate_qemu_size(size))
 
@@ -67,7 +67,7 @@ virt.create_image = function(name, size)
     mkfifo(vm_path .. "_monitor")
 end
 
-virt.create_image_from_base = function(name, base, resize)
+virt.create_vm_from_base = function(name, base, resize)
     assert(validate_bash_str(base))
     assert(validate_bash_str(name))
     assert(validate_qemu_size(resize))
@@ -161,7 +161,7 @@ QemuVirtMachine.new = function(name, info)
     assert(validate_bash_str(name))
 
     if virt.machines[name] then
-        return virt.machines[name], false
+        return virt.machines[name], true
     end
 
     if info.nic == false then info.nic = "none" end                   -- no networking
@@ -179,24 +179,26 @@ QemuVirtMachine.new = function(name, info)
     vm.serial_input = ie.io.open(info.vm_path .. "_serial.in", "w+")
     vm.monitor_input = ie.io.open(info.vm_path .. "_monitor.in", "w+")
 
-    minetest.log("[virt] Launching a virtual machine with command: " .. vm.command)
+    minetest.log("action", "[virt] Launching a virtual machine with command: " .. vm.command)
     vm.process = ie.io.popen(vm.command)
 
     virt.machines[name] = vm
     setmetatable(vm, QemuVirtMachine)
 
-    vm.qmp_greeting = QemuVirtMachine.receive_from_qmp(vm)
-
-    QemuVirtMachine.send_qmp_and_receive_laggy_consider_not_using(vm, {
-        execute = "qmp_capabilities" -- enter command mode or whatever, basically just make it work lmfao
+    while vm.qmp_greeting == nil do
+        vm.qmp_greeting = vm:receive_from_qmp()
+    end
+    vm:send_qmp_and_receive_laggy_consider_not_using({
+        execute =
+        "qmp_capabilities", -- enter command mode or whatever, basically just make the qemu monitor useful instead of just sitting there
     })
     return vm
 end
 
-setmetatable(QemuVirtMachine, { __call = QemuVirtMachine.new })
+setmetatable(QemuVirtMachine, { __call = function(_, ...) return QemuVirtMachine.new(...) end })
 
 function QemuVirtMachine:kill()
-    local file = ie.io.open(self.vm_path .. "_pid", "r") -- a temporary file
+    local file = ie.io.open(self.info.vm_path .. "_pid", "r") -- a temporary file
     -- if nil, it most likely means it has been killed already
     if file ~= nil then
         local pid = tonumber(file:read("*a"))
@@ -236,10 +238,12 @@ function QemuVirtMachine:send_qmp_command(table)
 end
 
 function QemuVirtMachine:receive_from_qmp()
-    local proc = io.popen("timeout " .. cat_timeout .. " cat " .. self.vm_path .. "_monitor.out", "r")
+    local proc = ie.io.popen(
+        "timeout " .. cat_timeout .. " cat " .. get_vm_file_path_from_name(self.name) .. "_monitor.out", "r")
     local ret = proc:read("*a")
     proc:close()
 
+    if #ret == 0 then return nil end
     return minetest.parse_json(ret)
 end
 
@@ -247,12 +251,11 @@ end
 -- but i understand if its the only reliable way
 function QemuVirtMachine:send_qmp_and_receive_laggy_consider_not_using(table)
     self:send_qmp_command(table)
-    local out = ""
-    while #out == 0 do
+    local out
+    while out == nil do
         out = self:receive_from_qmp()
     end
-
-    return minetest.parse_json(out)
+    return out
 end
 
 -- serial I/O
@@ -262,7 +265,7 @@ function QemuVirtMachine:send_input(input)
 end
 
 function QemuVirtMachine:get_output()
-    local proc = io.popen("timeout " .. cat_timeout .. " cat " .. self.vm_path .. "_serial.out", "r")
+    local proc = io.popen("timeout " .. cat_timeout .. " cat " .. self.info.vm_path .. "_serial.out", "r")
     local ret = proc:read("*a")
     proc:close()
 
@@ -454,11 +457,12 @@ function QemuVirtMachine:send_keycombo(keycombo_array, hold_time)
             }
         end
     end
+    if #keys == 0 then return false end
     QemuVirtMachine:send_qmp_command({
         execute = "send-key",
         arguments = {
             keys = keys,
-            hold_time = hold_time
+            hold_time = math.floor(hold_time)
         }
     })
 end
@@ -476,14 +480,14 @@ end
 -- cpu_index: int (optional)
 
 function QemuVirtMachine:send_human_monitor_command(command_line, cpu_index)
-    return self:send_qmp_and_receive_promise_laggy_consider_not_using({
+    return self:send_qmp_and_receive_laggy_consider_not_using({
         execute = "human-monitor-command",
         ["command-line"] = command_line,
         ["cpu-index"] = cpu_index,
     })
 end
 
-make_function_for("system-powerdown")
+make_function_for("system-powerdown", "powerdown")
 make_function_for("stop", "pause")
 make_function_for("cont", "resume")
 
