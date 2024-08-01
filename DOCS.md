@@ -25,6 +25,10 @@ also my docs may include weird typescriptey type definitions sometimes, beware o
 
 **`virt.machines`** - a table of all the virtual machines, indexed by name
 
+**`virt.json`** 
+- `virt.json.encode`/`virt.json.decode`
+- was done because of minor differences between minetest's json and how qemu expects it, like minetest json always has floats, qemu does not like that
+
 # `virt.QemuVirtMachine`
 ### Special properties:
 - same as virt
@@ -94,3 +98,66 @@ end
 **`QemuVirtMachine:pause()`** - a wrapper for the `stop` qmp command
 
 **`QemuVirtMachine:resume()`** - a wrapper for the `cont` qmp command
+
+
+# `formspec = virt.make_terminal(text: string, position:table, settings:table)`
+- the *extremely scuffed* ansi compliant-ish terminal
+- adds a scrollbar looking thing too
+- `position.x` `position.y` `position.w` `position.h` - the coordinates of the terminal in your formspec
+- `position.size` - the size of the letter (multiplier) a good one is 0.3
+- `position.scroll` - how much should the terminal be scrolled up (default 0, maximum scrolldown, the more up you go the more up the scroll gets, dont go to negative numbers)
+- `settings.color` - the color scheme, [see this for 3-bit and 4-bit colors](https://en.wikipedia.org/wiki/ANSI_escape_code), it is a table from 0 to 15, ordered like wikipedia (sgr attributes 30 to 37 = 0 to 7; sgr attributes 90 to 97 = 7 to 15)
+
+example of `settings.color`:  
+```lua
+local function rgb2hex(r, g, b)
+    if not g then -- greyscale
+        return "#" .. string.format("#%02X", r):rep(3)
+    else
+        return string.format("#%02X%02X%02X", r, g, b)
+    end
+end
+
+return {
+        [0] = rgb2hex(0, 0, 0),        -- black
+        [1] = rgb2hex(170, 0, 0),      -- red
+        [2] = rgb2hex(0, 170, 0),      -- green
+        [3] = rgb2hex(170, 85, 0),     -- yellow
+        [4] = rgb2hex(0, 0, 170),      -- blue
+        [5] = rgb2hex(170, 0, 170),    -- magenta
+        [6] = rgb2hex(0, 170, 170),    -- cyan
+        [7] = rgb2hex(170, 170, 170),  -- white
+        [8] = rgb2hex(85, 85, 85),     -- bright black
+        [9] = rgb2hex(255, 85, 85),    -- bright red
+        [10] = rgb2hex(85, 255, 85),   -- bright green
+        [11] = rgb2hex(255, 255, 85),  -- bright yellow
+        [12] = rgb2hex(85, 85, 255),   -- bright blue
+        [13] = rgb2hex(255, 85, 255),  -- bright magenta
+        [14] = rgb2hex(85, 255, 255),  -- bright cyan
+        [15] = rgb2hex(255, 255, 255), -- bright white
+    }
+```
+
+
+# extra docs for `virt.make_terminal`'s text
+- the terminal only supports ascii
+- control characters get ignored
+- see [the wikipedia page for ansi escape codes :D :D :D :D that's what this was based off of](https://en.wikipedia.org/wiki/ANSI_escape_code) before reading
+
+### C0 escape codes
+- backspace (0x08) - erases the character and goes back
+- tab (0x09) - unchanged
+- line feed (0x0A) (also known as \n) - moves to next line and like does the thing you expect from \n
+- carriage return (0x0D) - unchanged
+- escape (0x1B) - this is where the shenanigans begin
+
+### CSI escape codes
+- most of them are implemented
+- specifically the commands/final bytes:
+  - `A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`, `J`, `K`, `S`, `T`, `f`, (`m` -  partial), `s`, `u`
+
+### SGR parameters
+- a decent amount (for minetest) is supported
+- i know *all* of them could be supported but i am lazy :>
+- theese are supported:
+  - `0`, `1`, `3`, `7`, `8`, `10`, `22`, `23`, `28`, `30 to 37`, `90 to 97`, `38`, `39`, `40 to 47`, `100 to 107`, `48`, `49`

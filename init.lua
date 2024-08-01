@@ -238,6 +238,7 @@ function QemuVirtMachine:send_qmp_command(table)
 end
 
 function QemuVirtMachine:receive_from_qmp()
+    assert(validate_bash_str(self.name))
     local proc = ie.io.popen(
         "timeout " .. cat_timeout .. " cat " .. get_vm_file_path_from_name(self.name) .. "_monitor.out", "r")
     local ret = proc:read("*a")
@@ -265,6 +266,7 @@ function QemuVirtMachine:send_input(input)
 end
 
 function QemuVirtMachine:get_output()
+    assert(validate_bash_str(self.info.vm_path))
     local proc = ie.io.popen("timeout " .. cat_timeout .. " cat " .. self.info.vm_path .. "_serial.out", "r")
     local ret = proc:read("*a")
     proc:close()

@@ -67,7 +67,6 @@ local function font_char(char, state)
 
     -- 225 font chars
     base = base .. "^[verticalframe:225:" .. (byte - 32)
-    if state.underline then base = base .. "^U.png" end
     if state.foreground then base = "(" .. base .. "^[multiply:" .. state.foreground .. ")" end
     if state.background then base = "[fill:16x30:" .. state.background .. "^" .. base end
     return base
@@ -114,7 +113,6 @@ local cursor_hidden = false
 local graphics_state = {
     bold = false,
     italic = false,
-    underline = false,
     background = false,
     foreground = false,
     hide = false
@@ -271,8 +269,6 @@ local function parse_csi(ptr, text, out_text, cursor, real_size, settings)
                 graphics_state.bold = true
             elseif n == 3 then -- italic
                 graphics_state.italic = true
-            elseif n == 4 then -- underline
-                graphics_state.underline = true
             elseif n == 7 then
                 -- invert
                 local temp = graphics_state.background or "#000000"
@@ -283,13 +279,10 @@ local function parse_csi(ptr, text, out_text, cursor, real_size, settings)
             elseif n == 10 then -- reset font
                 graphics_state.bold = false
                 graphics_state.italic = false
-                graphics_state.underline = false
             elseif n == 22 then
                 graphics_state.bold = false
             elseif n == 23 then
                 graphics_state.italic = false
-            elseif n == 24 then
-                graphics_state.underline = false
             elseif n == 28 then
                 graphics_state.hide = false
             elseif in_range(n, 30, 37) then
@@ -404,7 +397,6 @@ virt.make_terminal = function(text, position, settings)
     graphics_state = {
         bold = false,
         italic = false,
-        underline = false,
         background = false,
         foreground = false,
         hide = false
