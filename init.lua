@@ -8,7 +8,7 @@ local WP = minetest.get_worldpath()
 
 virt = {
     machines = {},
-    virtual_machines_location = WP .. "/virtual_machines", -- todo: change to world path
+    virtual_machines_location = WP .. "/virtual_machines",
     json = loadfile(MP .. "/json.lua")()
 }
 
