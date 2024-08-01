@@ -6,6 +6,7 @@ local WP = minetest.get_worldpath()
 virt = {
     machines = {},
     virtual_machines_location = MP .. "/virtual_machines", -- todo: change to world path
+    json = loadfile(MP .. "/json.lua")()
 }
 
 local function get_vm_file_path_from_name(name)
@@ -141,8 +142,7 @@ local function build_command(name, info)
  -mon monitor,mode=control,pretty=off
  -watchdog-action poweroff
  -msg guest-name=on
- -pidfile '%s_pid']],
-        name, info.memory, info.vm_path, info.nic, info.vm_path, info.vm_path, info.vm_path), "\n", "")
+ -pidfile '%s_pid']], name, info.memory, info.vm_path, info.nic, info.vm_path, info.vm_path, info.vm_path), "\n", "")
     if info.cdrom then
         ret = ret .. format(" -cdrom '%s'", info.cdrom)
     end
@@ -233,7 +233,7 @@ end
 -- abstraction: uses tables instead of json
 
 function QemuVirtMachine:send_qmp_command(table)
-    local json = minetest.write_json(table)
+    local json = virt.json.encode(table)
     return self.monitor_input:write(json)
 end
 
@@ -244,7 +244,7 @@ function QemuVirtMachine:receive_from_qmp()
     proc:close()
 
     if #ret == 0 then return nil end
-    return minetest.parse_json(ret)
+    return virt.json.decode(ret)
 end
 
 -- consider not using....
@@ -265,207 +265,53 @@ function QemuVirtMachine:send_input(input)
 end
 
 function QemuVirtMachine:get_output()
-    local proc = io.popen("timeout " .. cat_timeout .. " cat " .. self.info.vm_path .. "_serial.out", "r")
+    local proc = ie.io.popen("timeout " .. cat_timeout .. " cat " .. self.info.vm_path .. "_serial.out", "r")
     local ret = proc:read("*a")
     proc:close()
 
     return ret
 end
 
--- QMP command wrappers
-
-local valid_keycodes = {
-    ["unmapped"] = true,
-    ["pause"] = true,
-    ["ro"] = true,
-    ["kp_comma"] = true,
-    ["kp_equals"] = true,
-    ["power"] = true,
-    ["hiragana"] = true,
-    ["henkan"] = true,
-    ["yen"] = true,
-    ["sleep"] = true,
-    ["wake"] = true,
-    ["audionext"] = true,
-    ["audioprev"] = true,
-    ["audiostop"] = true,
-    ["audioplay"] = true,
-    ["audiomute"] = true,
-    ["volumeup"] = true,
-    ["volumedown"] = true,
-    ["mediaselect"] = true,
-    ["mail"] = true,
-    ["calculator"] = true,
-    ["computer"] = true,
-    ["ac_home"] = true,
-    ["ac_back"] = true,
-    ["ac_forward"] = true,
-    ["ac_refresh"] = true,
-    ["ac_bookmarks"] = true,
-    ["muhenkan"] = true,
-    ["katakanahiragana"] = true,
-    ["lang1"] = true,
-    ["lang2"] = true,
-    ["f13"] = true,
-    ["f14"] = true,
-    ["f15"] = true,
-    ["f16"] = true,
-    ["f17"] = true,
-    ["f18"] = true,
-    ["f19"] = true,
-    ["f20"] = true,
-    ["f21"] = true,
-    ["f22"] = true,
-    ["f23"] = true,
-    ["f24"] = true,
-    ["shift"] = true,
-    ["shift_r"] = true,
-    ["alt"] = true,
-    ["alt_r"] = true,
-    ["ctrl"] = true,
-    ["ctrl_r"] = true,
-    ["menu"] = true,
-    ["esc"] = true,
-    ["1"] = true,
-    ["2"] = true,
-    ["3"] = true,
-    ["4"] = true,
-    ["5"] = true,
-    ["6"] = true,
-    ["7"] = true,
-    ["8"] = true,
-    ["9"] = true,
-    ["0"] = true,
-    ["minus"] = true,
-    ["equal"] = true,
-    ["backspace"] = true,
-    ["tab"] = true,
-    ["q"] = true,
-    ["w"] = true,
-    ["e"] = true,
-    ["r"] = true,
-    ["t"] = true,
-    ["y"] = true,
-    ["u"] = true,
-    ["i"] = true,
-    ["o"] = true,
-    ["p"] = true,
-    ["bracket_left"] = true,
-    ["bracket_right"] = true,
-    ["ret"] = true,
-    ["a"] = true,
-    ["s"] = true,
-    ["d"] = true,
-    ["f"] = true,
-    ["g"] = true,
-    ["h"] = true,
-    ["j"] = true,
-    ["k"] = true,
-    ["l"] = true,
-    ["semicolon"] = true,
-    ["apostrophe"] = true,
-    ["grave_accent"] = true,
-    ["backslash"] = true,
-    ["z"] = true,
-    ["x"] = true,
-    ["c"] = true,
-    ["v"] = true,
-    ["b"] = true,
-    ["n"] = true,
-    ["m"] = true,
-    ["comma"] = true,
-    ["dot"] = true,
-    ["slash"] = true,
-    ["asterisk"] = true,
-    ["spc"] = true,
-    ["caps_lock"] = true,
-    ["f1"] = true,
-    ["f2"] = true,
-    ["f3"] = true,
-    ["f4"] = true,
-    ["f5"] = true,
-    ["f6"] = true,
-    ["f7"] = true,
-    ["f8"] = true,
-    ["f9"] = true,
-    ["f10"] = true,
-    ["num_lock"] = true,
-    ["scroll_lock"] = true,
-    ["kp_divide"] = true,
-    ["kp_multiply"] = true,
-    ["kp_subtract"] = true,
-    ["kp_add"] = true,
-    ["kp_enter"] = true,
-    ["kp_decimal"] = true,
-    ["sysrq"] = true,
-    ["kp_0"] = true,
-    ["kp_1"] = true,
-    ["kp_2"] = true,
-    ["kp_3"] = true,
-    ["kp_4"] = true,
-    ["kp_5"] = true,
-    ["kp_6"] = true,
-    ["kp_7"] = true,
-    ["kp_8"] = true,
-    ["kp_9"] = true,
-    ["less"] = true,
-    ["f11"] = true,
-    ["f12"] = true,
-    ["print"] = true,
-    ["home"] = true,
-    ["pgup"] = true,
-    ["pgdn"] = true,
-    ["end"] = true,
-    ["left"] = true,
-    ["up"] = true,
-    ["down"] = true,
-    ["right"] = true,
-    ["insert"] = true,
-    ["delete"] = true,
-    ["stop"] = true,
-    ["again"] = true,
-    ["props"] = true,
-    ["undo"] = true,
-    ["front"] = true,
-    ["copy"] = true,
-    ["open"] = true,
-    ["paste"] = true,
-    ["find"] = true,
-    ["cut"] = true,
-    ["lf"] = true,
-    ["help"] = true,
-    ["meta_l"] = true,
-    ["meta_r"] = true,
-    ["compose"] = true,
-}
---[[
-    keycombo_array: can be a string of valid_keycodes, or a string seperated by "-", that upon seperation, will have valid keycodes
-    hold_time is in miliseconds, and is optional, by default 100 miliseconds
-]]
-function QemuVirtMachine:send_keycombo(keycombo_array, hold_time)
-    if type(keycombo_array) == "string" then
-        keycombo_array = string.split(keycombo_array, "-")
-    end
-    if not hold_time then hold_time = 100 end
-    local keys = {}
-
-    for _, v in ipairs(keycombo_array) do
-        if valid_keycodes[v] then
-            keys[#keys + 1] = {
-                type = "qcode",
-                data = v,
-            }
+-- util: send keycombo
+-- keycombo: a string seperated by "-"
+function QemuVirtMachine:send_keycombo(keycombo)
+    keycombo = string.split(keycombo, "-")
+    local inp = ""
+    local i = 1
+    while i <= #keycombo do
+        local v = keycombo[i]
+        if tonumber(v) then
+            inp = inp .. string.char(math.max(0, math.min(255, tonumber(v))))
+        elseif v == "ctrl" then
+            i = i + 1
+            local foward = keycombo[i]
+            if foward and #foward == 1 then
+                inp = inp .. string.char(math.abs(string.byte(string.upper(foward)) - 64))
+            else
+                break
+            end
+        elseif v == "esc" then
+            inp = inp .. string.char(0x1b)
+        elseif v == "del" then
+            inp = inp .. string.char(0x7F)
+        elseif v == "ret" or v == "enter" then
+            inp = inp .. "\n"
+        elseif v == "backspace" or v == "bs" then
+            inp = inp .. string.char(0x08)
+        elseif v == "tab" then
+            inp = inp .. string.char(0x09)
+        elseif v == "null" then
+            inp = inp .. string.char(0)
+        else
+            inp = inp .. v
         end
+        i = i + 1
     end
-    if #keys == 0 then return false end
-    QemuVirtMachine:send_qmp_command({
-        execute = "send-key",
-        arguments = {
-            keys = keys,
-            hold_time = math.floor(hold_time)
-        }
-    })
+
+    return self:send_input(inp)
 end
+
+-- QMP command wrappers
 
 local function make_function_for(cmd, alias)
     QemuVirtMachine[alias or cmd] = function(self)
@@ -527,3 +373,4 @@ minetest.register_on_shutdown(function()
 end)
 
 dofile(MP .. "/term.lua")
+dofile(MP .. "/example_frontend.lua")

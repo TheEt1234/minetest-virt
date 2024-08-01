@@ -1,9 +1,10 @@
 -- so
 -- task: implement almost everything relevant in https://en.wikipedia.org/wiki/ANSI_escape_code
--- the only sane way to do this is how lwcomputers did it
+-- the only sane way to do this is how lwcomputers did it (it didn't do ansi, but it had background colors n stuff)
 
 -- anyway this code is absolute dogwater
 -- lua doesn't provide a switch statement so enjoy if elseif spam
+
 local TAB_SIZE = 8 -- AS DEFINED BY THE SPEC!!!!!! (the spec being wikipedia)
 
 
@@ -120,7 +121,7 @@ local graphics_state = {
 }
 
 -- oh the yucky
-local function parse_csi(ptr, text, out_text, cursor, position, settings)
+local function parse_csi(ptr, text, out_text, cursor, real_size, settings)
     local MAX_CSI_LENGTH_OR_YOU_ARE_INSANE = 30
 
     local parameter_bytes = ""    -- 0x30-0x3F, ASCII 0-9:;<=>? and also 0x70-0x7E ASCII p-z{|}~, those ones are private
@@ -155,13 +156,11 @@ local function parse_csi(ptr, text, out_text, cursor, position, settings)
     -- horrible helpers
     -- lua metatables can be a footgun, especially __index sometimes
     local args = parameter_bytes:split(";")
-    minetest.log(dump(args))
     local args_default_0 = setmetatable({}, {
         __index = function(t, k)
             return tonumber(args[k]) or 0
         end
     })
-    minetest.log("arg0:" .. args_default_0[1])
     local args_default_1 = setmetatable({}, {
         __index = function(t, k)
             return tonumber(args[k]) or 1
@@ -174,24 +173,24 @@ local function parse_csi(ptr, text, out_text, cursor, position, settings)
     -- theese are commands
 
     if final_byte == "A" then     -- cursor up
-        cursor.y = cursor.y + args_default_1[1]
-    elseif final_byte == "B" then -- cursor down
         cursor.y = cap_at_one(cursor.y - args_default_1[1])
+    elseif final_byte == "B" then -- cursor down
+        cursor.y = cap_at_one(cursor.y + args_default_1[1])
     elseif final_byte == "C" then -- cursor foward
-        cursor.x = math.min(cursor.x + args_default_1[1], position.w)
+        cursor.x = math.min(cursor.x + args_default_1[1], real_size.x)
     elseif final_byte == "D" then -- cursor back
         cursor.x = cap_at_one(cursor.x - args_default_1[1])
-    elseif final_byte == "E" then -- cursor next line, moves cursor to beginning of line <n> lines down
+    elseif final_byte == "E" then -- moves cursor to beginning of line <n> lines down
+        cursor.x = 1
+        cursor.y = cap_at_one(cursor.y + args_default_1[1])
+    elseif final_byte == "F" then -- moves cursor to beginning of line <n> lines up
         cursor.x = 1
         cursor.y = cap_at_one(cursor.y - args_default_1[1])
-    elseif final_byte == "F" then -- cursor previous line
-        cursor.x = 1
-        cursor.y = cursor.y + args_default_1[1]
     elseif final_byte == "G" then                      -- cursor horizontal absolute
         cursor.y = cap_at_one(args_default_1[1])
     elseif final_byte == "H" or final_byte == "f" then -- cursor position
         cursor.y = cap_at_one(args_default_1[1])
-        cursor.x = math.min(cap_at_one(args_default_1[2]), position.w)
+        cursor.x = math.min(cap_at_one(args_default_1[2]), real_size.x)
     elseif final_byte == "J" then -- erase in display
         local n = args_default_0[1]
         if n == 0 then            -- clear from cursor to end
@@ -260,8 +259,10 @@ local function parse_csi(ptr, text, out_text, cursor, position, settings)
         end
     elseif final_byte == "m" then -- OH NO GRAPHICS oh the no
         -- oh the crap
-        for i = 1, #args do
-            local n = math.abs(args_default_0[i])
+        local n_iter = #args
+        if n_iter == 0 then n_iter = 1 end
+        for i = 1, n_iter do
+            local n = args_default_0[i]
             if n == 0 then -- reset or normal
                 for k in pairs(graphics_state) do
                     graphics_state[k] = false
@@ -349,10 +350,10 @@ local function parse_csi(ptr, text, out_text, cursor, position, settings)
     elseif final_byte == "l" and parameter_bytes == "?25" then
         cursor_hidden = true
     end
-    minetest.log("Command: " .. final_byte)
 
     return ptr
 end
+
 -- makes a terminal formspec, inside a container
 -- this at least has O(n) complexity *i think*
 -- but yeah its horrible
@@ -362,20 +363,28 @@ virt.make_terminal = function(text, position, settings)
         [0] = rgb2hex(0, 0, 0),        -- black
         [1] = rgb2hex(170, 0, 0),      -- red
         [2] = rgb2hex(0, 170, 0),      -- green
-        [3] = rgb2hex(170, 85, 0),     --yellow
+        [3] = rgb2hex(170, 85, 0),     -- yellow
         [4] = rgb2hex(0, 0, 170),      -- blue
-        [5] = rgb2hex(0, 170, 170),    -- cyan
-        [6] = rgb2hex(170, 170, 170),  -- white
-        [7] = rgb2hex(85, 85, 85),     -- bright black
-        [8] = rgb2hex(255, 85, 85),    -- bright red
-        [9] = rgb2hex(85, 255, 85),    -- bright green
-        [10] = rgb2hex(255, 255, 85),  -- bright yellow
-        [11] = rgb2hex(85, 85, 255),   -- bright blue
-        [12] = rgb2hex(255, 85, 255),  -- bright magenta
-        [13] = rgb2hex(85, 255, 255),  -- bright cyan
-        [14] = rgb2hex(255, 255, 255), -- bright white
+        [5] = rgb2hex(170, 0, 170),    -- magenta
+        [6] = rgb2hex(0, 170, 170),    -- cyan
+        [7] = rgb2hex(170, 170, 170),  -- white
+        [8] = rgb2hex(85, 85, 85),     -- bright black
+        [9] = rgb2hex(255, 85, 85),    -- bright red
+        [10] = rgb2hex(85, 255, 85),   -- bright green
+        [11] = rgb2hex(255, 255, 85),  -- bright yellow
+        [12] = rgb2hex(85, 85, 255),   -- bright blue
+        [13] = rgb2hex(255, 85, 255),  -- bright magenta
+        [14] = rgb2hex(85, 255, 255),  -- bright cyan
+        [15] = rgb2hex(255, 255, 255), -- bright white
     }
 
+    settings.color = table.copy(settings.color)
+
+    if settings.color and type(settings.color[0]) == "table" then
+        for i = 0, 15 do
+            settings.color[i] = rgb2hex(settings.color[i][1], settings.color[i][2], settings.color[i][3])
+        end
+    end
 
     cursor_hidden = false
     saved_cursor = { x = 1, y = 1 }
@@ -389,6 +398,8 @@ virt.make_terminal = function(text, position, settings)
         size_y = position.size * 2,
         scroll = position.scroll,
     }
+
+    position.w = position.w - 0.5 -- scrollbar space
 
     graphics_state = {
         bold = false,
@@ -422,16 +433,18 @@ virt.make_terminal = function(text, position, settings)
             character = sub(text, ptr, ptr)
             character_byte = byte(character)
             if character == "[" then
-                ptr = parse_csi(ptr, text, out_text, cursor, position, settings) or ptr
+                ptr = parse_csi(ptr, text, out_text, cursor, real_size, settings) or ptr
             else -- oh crap IT'S THE CSI ESCAPE CODES OH NO
                 parse_c0(character_byte, out_text, cursor)
             end
         elseif character_byte >= 32 then -- control characters get discarded
             cursor.x = cursor.x + 1
+            --[[
             if cursor.x > real_size.x then
                 cursor.x = 1
                 cursor.y = cursor.y + 1
             end
+            --]]
             out_text[cursor.y] = out_text[cursor.y] or {}
             table.insert(out_text[cursor.y], cursor.x, font_char(character, graphics_state))
             -- this is what some people call a war crime, i call it uhh
@@ -442,7 +455,7 @@ virt.make_terminal = function(text, position, settings)
     -- ok now with the output text, we need to build a formspec
     local formspec = {
         "container[" .. position.x, "," .. position.y .. "]",
-        string.format("box[0,0;%s,%s;#000000FF]", position.w, position.h)
+        string.format("box[0,0;%s,%s;#000000FF]", position.w, position.h),
     }
 
 
@@ -455,6 +468,11 @@ virt.make_terminal = function(text, position, settings)
 
     local down_y = cap_at_one(max_y - position.scroll)
     local up_y = cap_at_one(down_y - real_size.y + 1)
+
+    if math.abs(up_y - down_y) < position.h then
+        down_y = position.h
+        up_y = 1
+    end
 
     local fs_escape = minetest.formspec_escape
     local function make_fs_from_tex(tex, x, y, size)
@@ -469,102 +487,24 @@ virt.make_terminal = function(text, position, settings)
             for x = 1, real_size.x do
                 local xv = yv[x]              -- the texture
                 if xv and #xv ~= 0 then
-                    formspec[#formspec + 1] = make_fs_from_tex(xv, (x * position.size) - 0.5, Y, position.size)
+                    formspec[#formspec + 1] = make_fs_from_tex(xv, (x * position.size) - position.size, Y, position.size)
                 end
             end
         end
         Y = Y + position.size_y
     end
     formspec[#formspec + 1] = "container_end[]"
+    formspec[#formspec + 1] = string.format([[
+        box[%s,%s;0.5,%s;#000000]
+]], (position.x + position.w), position.y, position.h)
+    -- heh unicode :>
+    formspec[#formspec + 1] = string.format([[
+        button[%s,%s;0.5,0.5;scroll_up;▲]
+        button[%s,%s;0.5,0.5;scroll_down;▼]
+        button[%s,%s;0.5,0.5;scroll_reset;_]
+    ]], (position.x + position.w), position.y,
+        (position.x + position.w), (position.y + position.h - 0.5),
+        (position.x + position.w), (position.y + position.h - 1)
+    )
     return table.concat(formspec, "")
-end
-
-local UPDATE_TIME = 0.5
-local SCROLLBACK_SIZE = 10000
-
--- vm: QemuVirtMachine
--- player: ObjectRef
--- set_formspec: function(formspec)
--- returns handler: function(fields: string | nil )
-virt.make_frontend = function(state)
-    local pause_or_unpause = ""
-    if state.paused then
-        pause_or_unpause = [[
-            image_button[1,0;1,1;virt_ui_pause.png;pause;]
-            tooltip[pause;Pause]
-        ]]
-    else
-        pause_or_unpause = [[
-            image_button[1,0;1,1;virt_ui_resume.png;resume;]
-            tooltip[resume;Resume]
-        ]]
-    end
-
-    local fs = [[
-        formspec_version[7]
-        size[20, 20]
-
-        image_button[0,0;1,1;virt_ui_stop.png;stop;]
-        tooltip[stop;Stop the virtual machine] ]] .. pause_or_unpause .. [[
-    image_button[2,0;1,1;virt_ui_qmp.png;qmp;]
-    tooltip[qmp;Machine commands (a highly abstracted version of qemu qmp)]
-
-    image_button[3,0;1,1;virt_ui_settings.png;settings;]
-    tooltip[settings;Settings]
-
-    field[4,0;5,1;input;;]
-    field_close_on_enter[input;false]
-    button[9,0;3,1;submit_with_newline;Send input
-with enter]
-    button[12,0;3,1;submit_without_newline;Send input
-without enter]
-    button[15,0;3,1;submit_as_keycomb;Send input
-as key combo]
-    button[17.5,0.1;0.4,0.4;keycomb_help;?]
-    ]] .. virt.make_terminal(state.text, {
-        x = 0,
-        y = 1,
-        w = 20,
-        h = 19,
-        scroll = 0,
-        size = 0.3,
-    }, state.settings)
-
-    return fs
-end
-
-virt.make_frontend_for_vm = function(vm, player, set_formspec)
-    -- returns handler
-    local job
-    local state = {
-        text = "",
-        paused = false
-    }
-    local function f()
-        minetest.after(UPDATE_TIME, function()
-            state.text = string.sub(state.text .. vm:get_output(), -SCROLLBACK_SIZE, -1)
-            set_formspec(virt.make_frontend(state))
-            f()
-        end)
-    end
-
-    f()
-    return function(fields)
-        if fields.quit then
-            job:cancel()
-            set_formspec()
-        elseif fields.submit_with_newline then
-            vm:send_input(fields.input .. "\n")
-        elseif fields.submit_without_newline then
-            vm:send_input(fields.input)
-        elseif fields.submit_as_keycomb then
-            vm:send_keycombo(fields.input)
-        elseif fields.pause then
-            state.paused = true
-            vm:pause()
-        elseif fields.resume then
-            state.paused = false
-            vm:resume()
-        end
-    end
 end
