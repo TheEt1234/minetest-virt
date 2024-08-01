@@ -1,13 +1,18 @@
+local load_example_frontend = true
+
 -- this code may look nightmarish but... well... if you think that don't look at term.lua
 local cat_timeout = "0.001s"
 
 local MP = minetest.get_modpath(minetest.get_current_modname())
 local WP = minetest.get_worldpath()
+
 virt = {
     machines = {},
-    virtual_machines_location = MP .. "/virtual_machines", -- todo: change to world path
+    virtual_machines_location = WP .. "/virtual_machines", -- todo: change to world path
     json = loadfile(MP .. "/json.lua")()
 }
+
+minetest.mkdir(virt.virtual_machines_location)
 
 local function get_vm_file_path_from_name(name)
     return virt.virtual_machines_location .. "/" .. name
@@ -198,6 +203,7 @@ end
 setmetatable(QemuVirtMachine, { __call = function(_, ...) return QemuVirtMachine.new(...) end })
 
 function QemuVirtMachine:kill()
+    assert(validate_bash_str(self.info.vm_path))
     local file = ie.io.open(self.info.vm_path .. "_pid", "r") -- a temporary file
     -- if nil, it most likely means it has been killed already
     if file ~= nil then
@@ -375,4 +381,39 @@ minetest.register_on_shutdown(function()
 end)
 
 dofile(MP .. "/term.lua")
-dofile(MP .. "/example_frontend.lua")
+if load_example_frontend then
+    dofile(MP .. "/example_frontend.lua")
+end
+
+-- chatcommands
+
+minetest.register_chatcommand("make_vm_from_base", {
+    params = "<name> <base> [resize]",
+    privs = { server = true },
+    func = function(player_name, param)
+        local params = string.split(param, " ")
+        local name = params[1]
+        local base = params[2]
+        local resize = params[3]
+        if not name then
+            minetest.chat_send_player(player_name, "Missing name argument")
+            return
+        elseif not base then
+            minetest.chat_send_player(player_name, "Missing base argument")
+            return
+        end
+        virt.create_vm_from_base(name, base, resize)
+        minetest.chat_send_player(player_name, "Made the vm!")
+    end
+
+})
+
+minetest.register_chatcommand("kill_all_vms", {
+    privs = { server = true },
+    func = function(player_name)
+        for k, v in pairs(virt.machines) do
+            v:kill()
+        end
+        minetest.chat_send_player(player_name, "killed all vms")
+    end
+})

@@ -1,14 +1,6 @@
-do you not like luacontrollers, or joe's vm16? do you want something more *real*-ish?
-i've got a solution!
-
 # Virt
 
-Virtual machines in minetest!
-
-*Can it be done? Yes. Should it be done? No.*
-
-*a really weird really high level qemu wrapper desgined for minetest*  
-*maybeee just maybe deserves the complex installation tag*
+*(Qemu) Virtual machines in minetest!*
 
 # Dependencies
 
@@ -33,14 +25,13 @@ Virtual machines in minetest!
    - `qemu-img create -f qcow2 base_images/archlinux.img 2G`
 2) Follow the [standard arch install guide](https://wiki.archlinux.org/title/Installation_guide) on the image
    - use `qemu-system-x86_64 -cpu host -enable-kvm -m 2G -cdrom <the arch iso> -drive file=base_images/archlinux.img -boot menu=on` to launch the virtual machine, or whatever way you prefer
-3) Install a bootloader ***and make sure you include`console=ttyS0` in the kernel command line***
+3) Install a bootloader ***and make sure you include `console=ttyS0` in the kernel command line***
    - **when using grub**, before doing grub-mkconfig, go to `/etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"` to `GRUB_CMDLINE_LINUX_DEFAULT="console=ttyS0"`, then run `grub-mkconfig -o /boot/grub/grub.cfg`
 4) also make sure to have *nothing* graphical installed, and ***KEEP IT MINIMAL*** as the size of the base image is basically the minimum size for all images based on it (unless you want to risk data loss)
 5) you are basically done with the installation
+6) you can optionally do `/make_vm_from_base test archlinux 3G` and enable the example frontend (see first line of init.lua, and yes in the example frontend, the vm name is hardcoded to be `test`)
 
 # Faq
 
-Q: "Why can't you just use the arch iso"  
+Q: Why can't you just use the arch iso
 A: the arch linux iso does not have `console=ttyS0` in their kernel command line
-
-
