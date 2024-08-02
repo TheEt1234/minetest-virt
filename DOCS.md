@@ -36,7 +36,7 @@ also my docs may include weird typescriptey type definitions sometimes, beware o
 
 # `virt.QemuVirtMachine`
 ### Special properties:
-- same as virt
+- same properties as virt
 - its a class
 - here it will be refered to as `QemuVirtMachine` instead of `virt.QemuVirtMachine`
 ### The insides:
