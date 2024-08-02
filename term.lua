@@ -255,8 +255,7 @@ local function parse_csi(ptr, text, out_text, cursor, real_size, settings)
         for i = 1, math.min(cap_at_one(args_default_1[1]), 100) do
             table.insert(out_text, 1, {})
         end
-    elseif final_byte == "m" then -- OH NO GRAPHICS oh the no
-        -- oh the crap
+    elseif final_byte == "m" then -- oh the no its graphics...
         local n_iter = #args
         if n_iter == 0 then n_iter = 1 end
         for i = 1, n_iter do
