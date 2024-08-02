@@ -1,3 +1,7 @@
+# Chatcommands
+`/kill_all_vms` - kills all virtual machines
+`/make_vm_from_base <name> <base> [resize]` - makes a virtual machine, spaces in name and base aren't allowed, and ~~i am lazy to validate it all~~ with great power comes great responsibility so don't mispell your name or base or it may cause a server crash, also `'` can't be in any of theese fields, see definitions on what to put in the `[resize]` parameter
+
 # Definitions
 **QMP** - the qemu monitor protocol, not to be confused with HMP (the usual meaning of "qemu monitor", human monitor protocol)  
 **named pipe** - magic inter-process communication that has a name on your filesystem and your text editor *really* struggles with  
@@ -145,18 +149,21 @@ return {
 - see [the wikipedia page for ansi escape codes :D :D :D :D that's what this was based off of](https://en.wikipedia.org/wiki/ANSI_escape_code) before reading
 
 ### C0 escape codes
+
 - backspace (0x08) - erases the character and goes back
 - tab (0x09) - unchanged
-- line feed (0x0A) (also known as \n) - moves to next line and like does the thing you expect from \n
+- line feed (0x0A) (also known as \n) - moves to next line and like does the thing you expect from \n in unix (not windows basically)
 - carriage return (0x0D) - unchanged
 - escape (0x1B) - this is where the shenanigans begin
 
 ### CSI escape codes
+
 - most of them are implemented
 - specifically the commands/final bytes:
   - `A`, `B`, `C`, `D`, `E`, `F`, `G`, `H`, `J`, `K`, `S`, `T`, `f`, (`m` -  partial), `s`, `u`
 
 ### SGR parameters
+
 - a decent amount (for minetest) is supported
 - i know *all* of them could be supported but i am lazy :>
 - theese are supported:
