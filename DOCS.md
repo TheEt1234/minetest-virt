@@ -1,5 +1,6 @@
 # Chatcommands
-`/kill_all_vms` - kills all virtual machines
+`/kill_all_vms` - kills all virtual machines  
+
 `/make_vm_from_base <name> <base> [resize]` - makes a virtual machine, spaces in name and base aren't allowed, and ~~i am lazy to validate it all~~ with great power comes great responsibility so don't mispell your name or base or it may cause a server crash, also `'` can't be in any of theese fields, see definitions on what to put in the `[resize]` parameter
 
 # Definitions
@@ -144,6 +145,7 @@ return {
 
 
 # extra docs for `virt.make_terminal`'s text
+
 - the terminal only supports ascii
 - control characters get ignored
 - see [the wikipedia page for ansi escape codes :D :D :D :D that's what this was based off of](https://en.wikipedia.org/wiki/ANSI_escape_code) before reading

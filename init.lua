@@ -1,4 +1,4 @@
-local load_example_frontend = false
+local load_example_frontend = true
 
 -- this code may look nightmarish but... well... if you think that don't look at term.lua
 local cat_timeout = "0.001s"
