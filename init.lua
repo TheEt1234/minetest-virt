@@ -1,4 +1,5 @@
-local load_example_frontend = true
+local load_example_frontend = false
+local qmp_enabled = true -- exposing qmp to mods you dont trust can be risky
 
 -- this code may look nightmarish but... well... if you think that don't look at term.lua
 local cat_timeout = "0.001s"
@@ -9,7 +10,8 @@ local WP = minetest.get_worldpath()
 virt = {
     machines = {},
     virtual_machines_location = WP .. "/virtual_machines",
-    json = loadfile(MP .. "/json.lua")()
+    json = loadfile(MP .. "/json.lua")(),
+    qmp_enabled = qmp_enabled -- modifying this shouldnt do anything
 }
 
 minetest.mkdir(virt.virtual_machines_location)
@@ -144,19 +146,20 @@ local function build_command(name, info)
  -chardev pipe,id=serial,path='%s_serial'
  -chardev pipe,id=monitor,path='%s_monitor'
  -serial chardev:serial
- -mon monitor,mode=control,pretty=off
  -watchdog-action poweroff
  -msg guest-name=on
  -pidfile '%s_pid']], name, info.memory, info.vm_path, info.nic, info.vm_path, info.vm_path, info.vm_path), "\n", "")
     if info.cdrom then
         ret = ret .. format(" -cdrom '%s'", info.cdrom)
     end
+    if qmp_enabled then
+        ret = ret .. " -mon monitor,mode=control,pretty=off"
+    end
     return ret
 end
 
 --[[
     The QemuVirtMachine class
-    You know what this does
 ]]
 
 local QemuVirtMachine = {}
@@ -182,21 +185,24 @@ QemuVirtMachine.new = function(name, info)
 
 
     vm.serial_input = ie.io.open(info.vm_path .. "_serial.in", "w+")
-    vm.monitor_input = ie.io.open(info.vm_path .. "_monitor.in", "w+")
-
+    if qmp_enabled then
+        vm.monitor_input = ie.io.open(info.vm_path .. "_monitor.in", "w+")
+    end
     minetest.log("action", "[virt] Launching a virtual machine with command: " .. vm.command)
     vm.process = ie.io.popen(vm.command)
 
     virt.machines[name] = vm
     setmetatable(vm, QemuVirtMachine)
 
-    while vm.qmp_greeting == nil do
-        vm.qmp_greeting = vm:receive_from_qmp()
+    if qmp_enabled then
+        while vm.qmp_greeting == nil do
+            vm.qmp_greeting = vm:receive_from_qmp()
+        end
+        vm:send_qmp_and_receive_laggy_consider_not_using({
+            execute =
+            "qmp_capabilities", -- enter command mode or whatever, basically just make the qemu monitor useful instead of just sitting there
+        })
     end
-    vm:send_qmp_and_receive_laggy_consider_not_using({
-        execute =
-        "qmp_capabilities", -- enter command mode or whatever, basically just make the qemu monitor useful instead of just sitting there
-    })
     return vm
 end
 
@@ -237,34 +243,34 @@ end
 -- monitor I/O
 
 -- abstraction: uses tables instead of json
-
-function QemuVirtMachine:send_qmp_command(table)
-    local json = virt.json.encode(table)
-    return self.monitor_input:write(json)
-end
-
-function QemuVirtMachine:receive_from_qmp()
-    assert(validate_bash_str(self.name))
-    local proc = ie.io.popen(
-        "timeout " .. cat_timeout .. " cat " .. get_vm_file_path_from_name(self.name) .. "_monitor.out", "r")
-    local ret = proc:read("*a")
-    proc:close()
-
-    if #ret == 0 then return nil end
-    return virt.json.decode(ret)
-end
-
--- consider not using....
--- but i understand if its the only reliable way
-function QemuVirtMachine:send_qmp_and_receive_laggy_consider_not_using(table)
-    self:send_qmp_command(table)
-    local out
-    while out == nil do
-        out = self:receive_from_qmp()
+if qmp_enabled then
+    function QemuVirtMachine:send_qmp_command(table)
+        local json = virt.json.encode(table)
+        return self.monitor_input:write(json)
     end
-    return out
-end
 
+    function QemuVirtMachine:receive_from_qmp()
+        assert(validate_bash_str(self.name))
+        local proc = ie.io.popen(
+            "timeout " .. cat_timeout .. " cat " .. get_vm_file_path_from_name(self.name) .. "_monitor.out", "r")
+        local ret = proc:read("*a")
+        proc:close()
+
+        if #ret == 0 then return nil end
+        return virt.json.decode(ret)
+    end
+
+    -- consider not using....
+    -- but i understand if its the only reliable way
+    function QemuVirtMachine:send_qmp_and_receive_laggy_consider_not_using(table)
+        self:send_qmp_command(table)
+        local out
+        while out == nil do
+            out = self:receive_from_qmp()
+        end
+        return out
+    end
+end
 -- serial I/O
 -- \n is enter btw
 function QemuVirtMachine:send_input(input)
@@ -321,30 +327,31 @@ end
 
 -- QMP command wrappers
 
-local function make_function_for(cmd, alias)
-    QemuVirtMachine[alias or cmd] = function(self)
-        self:send_qmp_command({
-            execute = cmd
+if qmp_enabled then
+    local function make_function_for(cmd, alias)
+        QemuVirtMachine[alias or cmd] = function(self)
+            self:send_qmp_command({
+                execute = cmd
+            })
+        end
+    end
+
+    -- https://www.qemu.org/docs/master/system/monitor.html#qemu-monitor
+    -- command_line: string
+    -- cpu_index: int (optional)
+
+    function QemuVirtMachine:send_human_monitor_command(command_line, cpu_index)
+        return self:send_qmp_and_receive_laggy_consider_not_using({
+            execute = "human-monitor-command",
+            ["command-line"] = command_line,
+            ["cpu-index"] = cpu_index,
         })
     end
+
+    make_function_for("system-powerdown", "powerdown")
+    make_function_for("stop", "pause")
+    make_function_for("cont", "resume")
 end
-
--- https://www.qemu.org/docs/master/system/monitor.html#qemu-monitor
--- command_line: string
--- cpu_index: int (optional)
-
-function QemuVirtMachine:send_human_monitor_command(command_line, cpu_index)
-    return self:send_qmp_and_receive_laggy_consider_not_using({
-        execute = "human-monitor-command",
-        ["command-line"] = command_line,
-        ["cpu-index"] = cpu_index,
-    })
-end
-
-make_function_for("system-powerdown", "powerdown")
-make_function_for("stop", "pause")
-make_function_for("cont", "resume")
-
 
 local old_setfenv = setfenv
 local protected = {}

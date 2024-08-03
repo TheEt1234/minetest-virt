@@ -16,6 +16,8 @@
 
 ***so make sure you trust all your mods to not abuse virt even if virt tries to not leak anything***
 
+*also, by default, support for qmp is enabled, untrusted mods could abuse that, if you don't want support for qmp being enabled, see line 2 of `init.lua`*
+
 # Setup
 
 - verify that you have all the dependancies
@@ -25,11 +27,17 @@
 ### Making your own base image (with arch linux)
 
 1) create a qemu image
+
    - `qemu-img create -f qcow2 base_images/archlinux.img 2G`
+
 2) Follow the [standard arch install guide](https://wiki.archlinux.org/title/Installation_guide) on the image
+
    - use `qemu-system-x86_64 -cpu host -enable-kvm -m 2G -cdrom <the arch iso> -drive file=base_images/archlinux.img -boot menu=on` to launch the virtual machine, or *whatever way you prefer*
+
 3) Install a bootloader ***and make sure you include `console=ttyS0` in the kernel command line***
+
    - **when using grub**, before doing grub-mkconfig, go to `/etc/default/grub` and change `GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"` to `GRUB_CMDLINE_LINUX_DEFAULT="console=ttyS0"`, then run `grub-mkconfig -o /boot/grub/grub.cfg`
+
 4) also make sure to have *nothing* graphical installed, and ***KEEP IT MINIMAL*** as the size of the base image is basically the minimum size for all images based on it (unless you want to risk data loss)
 5) you can optionally do `/make_vm_from_base test archlinux 3G` and enable the example frontend (see first line of init.lua, and yes in the example frontend, the vm name is hardcoded to be `test`)
 
@@ -43,3 +51,8 @@ A: It uses named pipes (the .in/.out files) to communicate with qemu, it launche
 
 Q: Why have rxi's json thingy when you can just use minetest's  
 A: minetest's is weeird, when i try to do `minetest.write_json({a=5})` it returns `{"a":5.0}` when it should be `{"a":5}` and yes it matters for qemu
+
+# TODOs
+- more CPU limiting (like idk only x% cpu usage, can be achieved with `systemd-run`)
+- better security
+- testing
