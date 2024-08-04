@@ -1,4 +1,4 @@
-local load_example_frontend = true
+local load_example_frontend = false
 local qmp_enabled = true -- exposing qmp to mods you dont trust can be risky
 
 -- this code may look nightmarish but... well... if you think that don't look at term.lua
