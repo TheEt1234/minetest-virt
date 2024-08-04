@@ -11,6 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 # `json.lua`
 license mentioned in the file itself, it has been slightly modified
 
-# `textures/Hack-*.ttf` and `B.png`, `BI.png` `I.png` `R.png`
-- https://github.com/source-foundry/Hack/blob/master/LICENSE.md
+# `textures/Cousine-*.ttf` and `B.png`, `BI.png`, `I.png`, `R.png`
+- See `Cousine-LICENSE.txt` for the license of theese files
 - `B.png` `BI.png` `I.png` `R.png` were made from the font files

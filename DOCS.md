@@ -4,7 +4,7 @@
 `/make_vm_from_base <name> <base> [resize]` - makes a virtual machine, spaces in name and base aren't allowed, and ~~i am lazy to validate it all~~ with great power comes great responsibility so don't mispell your name or base or it may cause a server crash, also `'` can't be in any of theese fields, see definitions on what to put in the `[resize]` parameter
 
 # Definitions
-**QMP** - the qemu monitor protocol, not to be confused with HMP (the usual meaning of "qemu monitor", human monitor protocol)  
+**QMP** - the qemu monitor protocol, not to be confused with HMP (the usual meaning of "qemu monitor", human monitor protocol), can be disabled in line 2 of init.lua because of security concerns  
 **named pipe** - magic inter-process communication that has a name on your filesystem and your text editor *really* struggles with  
 **virtual machine** - by this i mean the `x.img` file but also the named pipes (`x_something.in/.out`), but not the `vmname_pid` file  
 **the pid file** - this is a file that contains the virtual machine's pid, only avaliable when it is actually running  
